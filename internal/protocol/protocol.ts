@@ -68,110 +68,86 @@ const sepLen = Buffer.from(messageSeparator).length;
  * @returns An object containing the extracted frame and its size
  */
 export function extractFrameFromBuffer(buffer: Buffer): { frame: Resp | null; frameSize: number } {
+    // If there is no separator in the buffer, we cannot extract any RESP frame
+    const sep = buffer.indexOf(messageSeparator);
+    if (sep < 0) {
+        return { frame: null, frameSize: 0 };
+    }
+
     // Check for first byte
     switch (buffer[0]) {
         // Simple String
         case RESP_PREFIXES.SIMPLE_STRING: {
-            // Find the separator
-            const sep = buffer.indexOf(messageSeparator);
-
-            // If a separator is found, extract the frame as a RespSimpleString
-            // and return it along with the position of the next message
-            if (sep >= 0) {
-                const value = buffer.subarray(1, sep).toString();
-                return { frame: RespSimpleString(value), frameSize: sep + sepLen };
-            }
-            break;
-        }
-
-        // Integer
-        case RESP_PREFIXES.INTEGER: {
-            // Find the separator
-            const sep = buffer.indexOf(messageSeparator);
-
-            // If a separator is found, extract the frame as a RespInteger
-            // and return it along with the position of the next message
-            if (sep >= 0) {
-                const value = parseInt(buffer.subarray(1, sep).toString());
-                if (!isNaN(value)) {
-                    return { frame: RespInteger(value), frameSize: sep + sepLen };
-                }
-            }
-            break;
-        }
-
-        // Bulk String
-        case RESP_PREFIXES.BULK_STRING: {
-            // Find the separator
-            const firstSeparator = buffer.indexOf(messageSeparator);
-
-            // If a separator is not found, we cannot extract a RespBulkString
-            if (firstSeparator < 0) break;
-
-            // If a separator is found, extract the length of the bulk string
-            const bulkStringLength = parseInt(buffer.subarray(1, firstSeparator).toString());
-
-            // If the length is -1, it indicates a null frame
-            if (bulkStringLength === -1) {
-                return { frame: null, frameSize: firstSeparator + sepLen };
-            }
-
-            // If the length is not a valid number, we cannot extract a RespBulkString
-            if (isNaN(bulkStringLength) || bulkStringLength < 0) break;
-
-            // There has to be a "closing" separator after the bulk string content
-            const secondSeparator = buffer.indexOf(
-                messageSeparator,
-                firstSeparator + bulkStringLength,
-            );
-            if (secondSeparator < 0) break;
-
-            // Get the content by grabbing subarray from the first separator to
-            // the expected length of the bulk string
-            const content = buffer.subarray(
-                firstSeparator + sepLen,
-                firstSeparator + sepLen + bulkStringLength,
-            );
-
-            return {
-                frame: RespBulkString(content.toString()),
-                frameSize: firstSeparator + sepLen + bulkStringLength + sepLen,
-            };
+            const value = buffer.subarray(1, sep).toString();
+            return { frame: RespSimpleString(value), frameSize: sep + sepLen };
         }
 
         // Error
         case RESP_PREFIXES.ERROR: {
-            // Find the separator
-            const errorSep = buffer.indexOf(messageSeparator);
+            const errorValue = buffer.subarray(1, sep).toString();
+            return { frame: RespError(errorValue), frameSize: sep + sepLen };
+        }
 
-            // If a separator is found, extract the frame as a RespError
-            // and return it along with the position of the next message
-            if (errorSep >= 0) {
-                const errorValue = buffer.subarray(1, errorSep).toString();
-                return { frame: RespError(errorValue), frameSize: errorSep + sepLen };
+        // Integer
+        case RESP_PREFIXES.INTEGER: {
+            const value = parseInt(buffer.subarray(1, sep).toString());
+            if (isNaN(value)) {
+                // If the value is not a valid number, we cannot extract an integer
+                return { frame: null, frameSize: 0 };
             }
-            break;
+            return { frame: RespInteger(value), frameSize: sep + sepLen };
+        }
+
+        // Bulk String
+        case RESP_PREFIXES.BULK_STRING: {
+            // If a separator is found, extract the length of the bulk string
+            const bulkStringLength = parseInt(buffer.subarray(1, sep).toString());
+
+            // If the length is -1, it indicates a null frame
+            if (bulkStringLength === -1) {
+                return { frame: null, frameSize: sep + sepLen };
+            }
+
+            // If the length is not a valid number, we cannot extract a RespBulkString
+            if (isNaN(bulkStringLength) || bulkStringLength < 0) {
+                return { frame: null, frameSize: 0 };
+            }
+
+            // There has to be a "closing" separator after the bulk string content
+            const secondSeparator = buffer.indexOf(messageSeparator, sep + bulkStringLength);
+            if (secondSeparator < 0) {
+                // If we cannot find the second separator, we cannot extract a RespBulkString
+                return { frame: null, frameSize: 0 };
+            }
+
+            // Get the content by grabbing subarray from the first separator to
+            // the expected length of the bulk string
+            const content = buffer.subarray(sep + sepLen, sep + sepLen + bulkStringLength);
+
+            return {
+                frame: RespBulkString(content.toString()),
+                frameSize: sep + sepLen + bulkStringLength + sepLen,
+            };
         }
 
         // Array
         case RESP_PREFIXES.ARRAY: {
-            // Find the separator
-            const arraySep = buffer.indexOf(messageSeparator);
-
             // If a separator is found, extract the length of the array
-            const arrayLength = parseInt(buffer.subarray(1, arraySep).toString());
+            const arrayLength = parseInt(buffer.subarray(1, sep).toString());
 
             // If the length is -1, it indicates a null frame
             if (arrayLength === -1) {
-                return { frame: null, frameSize: arraySep + sepLen };
+                return { frame: null, frameSize: sep + sepLen };
             }
 
             // If the length is not a valid number, we cannot extract an Array
-            if (isNaN(arrayLength)) break;
+            if (isNaN(arrayLength) || arrayLength < 0) {
+                return { frame: null, frameSize: 0 };
+            }
 
             // Let's look for the next `arrayLength` separators
-            let currentIndex = arraySep + sepLen;
-            let totalSize = arraySep + sepLen;
+            let currentIndex = sep + sepLen;
+            let totalSize = sep + sepLen;
             const frames: Resp[] = [];
 
             for (let i = 0; i < arrayLength; i++) {
@@ -195,9 +171,11 @@ export function extractFrameFromBuffer(buffer: Buffer): { frame: Resp | null; fr
                 frameSize: totalSize,
             };
         }
-    }
 
-    return { frame: null, frameSize: 0 };
+        // Fallthrough case for unsupported RESP types
+        default:
+            return { frame: null, frameSize: 0 };
+    }
 }
 
 /**
