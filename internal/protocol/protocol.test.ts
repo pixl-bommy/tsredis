@@ -2,6 +2,7 @@ import test, { describe } from "node:test";
 import assert from "node:assert";
 
 import {
+    BulkString,
     encodeFrameToBuffer,
     extractFrameFromBuffer,
     RespError,
@@ -35,6 +36,24 @@ describe("Protocol Tests", () => {
                 expectedFrame: RespError("Error message"),
                 expectedSize: 16,
             },
+            {
+                name: "Bulk string with content",
+                buffer: Buffer.from("$12\r\nBulk content\r\n"),
+                expectedFrame: BulkString("Bulk content"),
+                expectedSize: 19,
+            },
+            {
+                name: "Empty bulk string",
+                buffer: Buffer.from("$0\r\n\r\n"),
+                expectedFrame: BulkString(""),
+                expectedSize: 6,
+            },
+            {
+                name: "bulk sting with length -1 is a null frame",
+                buffer: Buffer.from("$-1\r\n"),
+                expectedFrame: null,
+                expectedSize: 5,
+            },
         ];
 
         testCases.forEach(({ name, buffer, expectedFrame, expectedSize }) => {
@@ -63,6 +82,21 @@ describe("Protocol Tests", () => {
                 name: "Error frame",
                 frame: RespError("An error occurred"),
                 expectedBuffer: Buffer.from("-An error occurred\r\n"),
+            },
+            {
+                name: "Bulk string with content",
+                frame: BulkString("Bulk content"),
+                expectedBuffer: Buffer.from("$12\r\nBulk content\r\n"),
+            },
+            {
+                name: "Empty bulk string",
+                frame: BulkString(""),
+                expectedBuffer: Buffer.from("$0\r\n\r\n"),
+            },
+            {
+                name: "`null` frame will be encoded as an special bulk string",
+                frame: null,
+                expectedBuffer: Buffer.from("$-1\r\n"),
             },
         ];
 

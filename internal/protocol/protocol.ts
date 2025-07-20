@@ -1,7 +1,12 @@
-type Resp = SimpleString | RespError;
+type Resp = SimpleString | BulkString | RespError | null;
 
 type SimpleString = {
     type: "SimpleString";
+    value: string;
+};
+
+type BulkString = {
+    type: "BulkString";
     value: string;
 };
 
@@ -15,6 +20,11 @@ export const SimpleString = (value: string): SimpleString => ({
     value,
 });
 
+export const BulkString = (value: string): BulkString => ({
+    type: "BulkString",
+    value,
+});
+
 export const RespError = (value: string): RespError => ({
     type: "Error",
     value,
@@ -23,6 +33,7 @@ export const RespError = (value: string): RespError => ({
 // RESP protocol prefixes as constants
 const RESP_PREFIXES = {
     SIMPLE_STRING: 43, // '+'.charCodeAt(0)
+    BULK_STRING: 36, // '$'.charCodeAt(0)
     ERROR: 45, // '-'.charCodeAt(0)
 } as const;
 
@@ -51,6 +62,45 @@ export function extractFrameFromBuffer(buffer: Buffer): { frame: Resp | null; fr
             break;
         }
 
+        // Bulk String
+        case RESP_PREFIXES.BULK_STRING: {
+            // Find the separator
+            const firstSeparator = buffer.indexOf(messageSeparator);
+
+            // If a separator is not found, we cannot extract a BulkString
+            if (firstSeparator < 0) break;
+
+            // If a separator is found, extract the length of the bulk string
+            const bulkStringLength = parseInt(buffer.subarray(1, firstSeparator).toString());
+
+            // If the length is -1, it indicates a null frame
+            if (bulkStringLength === -1) {
+                return { frame: null, frameSize: firstSeparator + sepLen };
+            }
+
+            // If the length is not a valid number, we cannot extract a BulkString
+            if (isNaN(bulkStringLength)) break;
+
+            // let's look for the second separator
+            const secondSeparator = buffer.indexOf(messageSeparator, firstSeparator + sepLen);
+
+            // If the second separator is not found, we cannot extract a BulkString
+            if (secondSeparator < 0) break;
+
+            // If the second separator is found, extract the frame as a BulkString
+            // and return it along with the position of the next message
+            const value = buffer.subarray(firstSeparator + sepLen, secondSeparator).toString();
+            if (value.length !== bulkStringLength) {
+                // TODO: we should handle that case, but for now, we will just leave it as is
+                break;
+            }
+
+            return {
+                frame: BulkString(value),
+                frameSize: secondSeparator + sepLen,
+            };
+        }
+
         // Error
         case RESP_PREFIXES.ERROR: {
             // Find the separator
@@ -76,9 +126,18 @@ export function extractFrameFromBuffer(buffer: Buffer): { frame: Resp | null; fr
  * @throws Error if the frame type is not supported
  */
 export function encodeFrameToBuffer(frame: Resp): Buffer {
+    if (frame === null) {
+        // Special case for null frame
+        return Buffer.from("$-1\r\n");
+    }
+
     switch (frame.type) {
         case "SimpleString":
             return Buffer.from(`+${frame.value}${messageSeparator}`);
+        case "BulkString":
+            return Buffer.from(
+                `$${Buffer.byteLength(frame.value)}\r\n${frame.value}${messageSeparator}`,
+            );
         case "Error":
             return Buffer.from(`-${frame.value}${messageSeparator}`);
         default:
