@@ -1,7 +1,12 @@
 import test, { describe } from "node:test";
 import assert from "node:assert";
 
-import { encodeFrameToBuffer, extractFrameFromBuffer, SimpleString } from "./protocol.ts";
+import {
+    encodeFrameToBuffer,
+    extractFrameFromBuffer,
+    RespError,
+    SimpleString,
+} from "./protocol.ts";
 
 describe("Protocol Tests", () => {
     describe("extract frame from buffer", () => {
@@ -23,6 +28,12 @@ describe("Protocol Tests", () => {
                 buffer: Buffer.from("+OK\r\n+Next"),
                 expectedFrame: SimpleString("OK"),
                 expectedSize: 5,
+            },
+            {
+                name: "Full error message",
+                buffer: Buffer.from("-Error message\r\n"),
+                expectedFrame: RespError("Error message"),
+                expectedSize: 16,
             },
         ];
 
@@ -47,6 +58,11 @@ describe("Protocol Tests", () => {
                 name: "Empty simple string",
                 frame: SimpleString(""),
                 expectedBuffer: Buffer.from("+\r\n"),
+            },
+            {
+                name: "Error frame",
+                frame: RespError("An error occurred"),
+                expectedBuffer: Buffer.from("-An error occurred\r\n"),
             },
         ];
 
