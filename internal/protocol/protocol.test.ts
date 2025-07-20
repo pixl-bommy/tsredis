@@ -6,6 +6,7 @@ import {
     encodeFrameToBuffer,
     extractFrameFromBuffer,
     RespError,
+    RespInteger,
     SimpleString,
 } from "./protocol.ts";
 
@@ -89,6 +90,54 @@ describe("Protocol Tests", () => {
         });
     });
 
+    describe("RESP: integer", () => {
+        [
+            {
+                name: "Integer with value",
+                buffer: Buffer.from(":42\r\n"),
+                expectedFrame: RespInteger(42),
+                expectedSize: 5,
+            },
+            {
+                name: "Negative integer",
+                buffer: Buffer.from(":-1\r\n"),
+                expectedFrame: RespInteger(-1),
+                expectedSize: 5,
+            },
+            {
+                name: "Zero integer",
+                buffer: Buffer.from(":0\r\n"),
+                expectedFrame: RespInteger(0),
+                expectedSize: 4,
+            },
+        ].forEach(({ name, buffer, expectedFrame, expectedSize }) => {
+            test(`extract: ${name}`, () => {
+                const { frame, frameSize } = extractFrameFromBuffer(buffer);
+
+                assert.deepStrictEqual(frame, expectedFrame, "Failed to parse frame correctly");
+                assert.strictEqual(frameSize, expectedSize, "Incorrect frame size");
+            });
+        });
+
+        [
+            {
+                name: "Positive integer",
+                frame: RespInteger(12345),
+                expectedBuffer: Buffer.from(":12345\r\n"),
+            },
+            {
+                name: "Negative integer",
+                frame: RespInteger(-67890),
+                expectedBuffer: Buffer.from(":-67890\r\n"),
+            },
+        ].forEach(({ name, frame, expectedBuffer }) => {
+            test(`encode: ${name}`, () => {
+                const buffer = encodeFrameToBuffer(frame);
+                assert.deepEqual(buffer, expectedBuffer, "Encoded buffer does not match expected");
+            });
+        });
+    });
+
     describe("RESP: bulk string", () => {
         [
             {
@@ -117,7 +166,7 @@ describe("Protocol Tests", () => {
                 assert.strictEqual(frameSize, expectedSize, "Incorrect frame size");
             });
         });
-        
+
         [
             {
                 name: "Bulk string with content",

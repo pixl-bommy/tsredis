@@ -1,8 +1,13 @@
-type Resp = SimpleString | BulkString | RespError | null;
+type Resp = SimpleString | RespInteger | BulkString | RespError | null;
 
 type SimpleString = {
     type: "SimpleString";
     value: string;
+};
+
+type RespInteger = {
+    type: "Integer";
+    value: number;
 };
 
 type BulkString = {
@@ -20,6 +25,11 @@ export const SimpleString = (value: string): SimpleString => ({
     value,
 });
 
+export const RespInteger = (value: number): RespInteger => ({
+    type: "Integer",
+    value,
+});
+
 export const BulkString = (value: string): BulkString => ({
     type: "BulkString",
     value,
@@ -33,6 +43,7 @@ export const RespError = (value: string): RespError => ({
 // RESP protocol prefixes as constants
 const RESP_PREFIXES = {
     SIMPLE_STRING: 43, // '+'.charCodeAt(0)
+    INTEGER: 58, // ':'.charCodeAt(0)
     BULK_STRING: 36, // '$'.charCodeAt(0)
     ERROR: 45, // '-'.charCodeAt(0)
 } as const;
@@ -58,6 +69,22 @@ export function extractFrameFromBuffer(buffer: Buffer): { frame: Resp | null; fr
             if (sep >= 0) {
                 const value = buffer.subarray(1, sep).toString();
                 return { frame: SimpleString(value), frameSize: sep + sepLen };
+            }
+            break;
+        }
+
+        // Integer
+        case RESP_PREFIXES.INTEGER: {
+            // Find the separator
+            const sep = buffer.indexOf(messageSeparator);
+
+            // If a separator is found, extract the frame as a RespInteger
+            // and return it along with the position of the next message
+            if (sep >= 0) {
+                const value = parseInt(buffer.subarray(1, sep).toString());
+                if (!isNaN(value)) {
+                    return { frame: RespInteger(value), frameSize: sep + sepLen };
+                }
             }
             break;
         }
@@ -134,6 +161,8 @@ export function encodeFrameToBuffer(frame: Resp): Buffer {
     switch (frame.type) {
         case "SimpleString":
             return Buffer.from(`+${frame.value}${messageSeparator}`);
+        case "Integer":
+            return Buffer.from(`:${frame.value}${messageSeparator}`);
         case "BulkString":
             return Buffer.from(
                 `$${Buffer.byteLength(frame.value)}\r\n${frame.value}${messageSeparator}`,
