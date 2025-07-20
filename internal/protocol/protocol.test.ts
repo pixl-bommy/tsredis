@@ -5,6 +5,7 @@ import {
     BulkString,
     encodeFrameToBuffer,
     extractFrameFromBuffer,
+    RespArray,
     RespError,
     RespInteger,
     SimpleString,
@@ -182,6 +183,79 @@ describe("Protocol Tests", () => {
                 name: "`null` frame will be encoded as an special bulk string",
                 frame: null,
                 expectedBuffer: Buffer.from("$-1\r\n"),
+            },
+        ].forEach(({ name, frame, expectedBuffer }) => {
+            test(`encode: ${name}`, () => {
+                const buffer = encodeFrameToBuffer(frame);
+                assert.deepEqual(buffer, expectedBuffer, "Encoded buffer does not match expected");
+            });
+        });
+    });
+
+    describe("RESP: array", () => {
+        [
+            {
+                name: "array with basic content",
+                buffer: Buffer.from("*2\r\n$12\r\nBulk content\r\n$2\r\nok\r\n\r\n"),
+                expectedFrame: RespArray([BulkString("Bulk content"), BulkString("ok")]),
+                expectedSize: 33,
+            },
+            {
+                name: "array with mixed content",
+                buffer: Buffer.from("*3\r\n$12\r\nBulk content\r\n:123\r\n$2\r\nok\r\n\r\n"),
+                expectedFrame: RespArray([
+                    BulkString("Bulk content"), // = $12\r\nBulk content\r\n
+                    RespInteger(123), // = :123\r\n
+                    BulkString("ok"), // = $2\r\nok\r\n
+                ]),
+                expectedSize: 39,
+            },
+            {
+                name: "array with mixed and `null` content",
+                buffer: Buffer.from("*4\r\n$12\r\nBulk content\r\n*-1\r\n:123\r\n$2\r\nok\r\n\r\n"),
+                expectedFrame: RespArray([
+                    BulkString("Bulk content"), // = $12\r\nBulk content\r\n
+                    null, // = *-1\r\n
+                    RespInteger(123), // = :123\r\n
+                    BulkString("ok"), // = $2\r\nok\r\n
+                ]),
+                expectedSize: 44,
+            },
+            {
+                name: "Empty array",
+                buffer: Buffer.from("*0\r\n\r\n"),
+                expectedFrame: RespArray([]),
+                expectedSize: 6,
+            },
+            {
+                name: "array with length -1 is a `null` frame",
+                buffer: Buffer.from("*-1\r\n"),
+                expectedFrame: null,
+                expectedSize: 5,
+            },
+        ].forEach(({ name, buffer, expectedFrame, expectedSize }) => {
+            test(`extract: ${name}`, () => {
+                const { frame, frameSize } = extractFrameFromBuffer(buffer);
+
+                assert.deepStrictEqual(frame, expectedFrame, "Failed to parse frame correctly");
+                assert.strictEqual(frameSize, expectedSize, "Incorrect frame size");
+            });
+        });
+
+        [
+            {
+                name: "mixed content array",
+                frame: RespArray([
+                    BulkString("Bulk content"), // = $12\r\nBulk content\r\n
+                    RespInteger(123), // = :123\r\n
+                    BulkString("ok"), // = $2\r\nok\r\n
+                ]),
+                expectedBuffer: Buffer.from("*3\r\n$12\r\nBulk content\r\n:123\r\n$2\r\nok\r\n\r\n"),
+            },
+            {
+                name: "empty array",
+                frame: RespArray([]),
+                expectedBuffer: Buffer.from("*0\r\n\r\n"),
             },
         ].forEach(({ name, frame, expectedBuffer }) => {
             test(`encode: ${name}`, () => {
