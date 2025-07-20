@@ -117,25 +117,25 @@ export function extractFrameFromBuffer(buffer: Buffer): { frame: Resp | null; fr
             }
 
             // If the length is not a valid number, we cannot extract a RespBulkString
-            if (isNaN(bulkStringLength)) break;
+            if (isNaN(bulkStringLength) || bulkStringLength < 0) break;
 
-            // let's look for the second separator
-            const secondSeparator = buffer.indexOf(messageSeparator, firstSeparator + sepLen);
-
-            // If the second separator is not found, we cannot extract a RespBulkString
+            // There has to be a "closing" separator after the bulk string content
+            const secondSeparator = buffer.indexOf(
+                messageSeparator,
+                firstSeparator + bulkStringLength,
+            );
             if (secondSeparator < 0) break;
 
-            // If the second separator is found, extract the frame as a RespBulkString
-            // and return it along with the position of the next message
-            const value = buffer.subarray(firstSeparator + sepLen, secondSeparator).toString();
-            if (value.length !== bulkStringLength) {
-                // TODO: we should handle that case, but for now, we will just leave it as is
-                break;
-            }
+            // Get the content by grabbing subarray from the first separator to
+            // the expected length of the bulk string
+            const content = buffer.subarray(
+                firstSeparator + sepLen,
+                firstSeparator + sepLen + bulkStringLength,
+            );
 
             return {
-                frame: RespBulkString(value),
-                frameSize: secondSeparator + sepLen,
+                frame: RespBulkString(content.toString()),
+                frameSize: firstSeparator + sepLen + bulkStringLength + sepLen,
             };
         }
 
@@ -189,17 +189,10 @@ export function extractFrameFromBuffer(buffer: Buffer): { frame: Resp | null; fr
                 totalSize += extractedFrame.frameSize;
             }
 
-            // next chars have to be the message separator
-            const arrayEndSep = buffer.subarray(currentIndex).indexOf(messageSeparator);
-            if (arrayEndSep !== 0) {
-                // If the next characters are not the message separator, we stop processing
-                return { frame: null, frameSize: 0 };
-            }
-
             // If we successfully extracted all frames, return the RespArray
             return {
                 frame: RespArray(frames),
-                frameSize: totalSize + sepLen,
+                frameSize: totalSize,
             };
         }
     }
