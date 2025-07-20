@@ -2,13 +2,13 @@ import test, { describe } from "node:test";
 import assert from "node:assert";
 
 import {
-    BulkString,
+    RespBulkString,
     encodeFrameToBuffer,
     extractFrameFromBuffer,
     RespArray,
     RespError,
     RespInteger,
-    SimpleString,
+    RespSimpleString,
 } from "./protocol.ts";
 
 describe("Protocol Tests", () => {
@@ -23,13 +23,13 @@ describe("Protocol Tests", () => {
             {
                 name: "Full simple string",
                 buffer: Buffer.from("+OK\r\n"),
-                expectedFrame: SimpleString("OK"),
+                expectedFrame: RespSimpleString("OK"),
                 expectedSize: 5,
             },
             {
                 name: "Full, followed by partial simple string",
                 buffer: Buffer.from("+OK\r\n+Next"),
-                expectedFrame: SimpleString("OK"),
+                expectedFrame: RespSimpleString("OK"),
                 expectedSize: 5,
             },
         ].forEach(({ name, buffer, expectedFrame, expectedSize }) => {
@@ -44,12 +44,12 @@ describe("Protocol Tests", () => {
         [
             {
                 name: "Simple string with content",
-                frame: SimpleString("Hello"),
+                frame: RespSimpleString("Hello"),
                 expectedBuffer: Buffer.from("+Hello\r\n"),
             },
             {
                 name: "Empty simple string",
-                frame: SimpleString(""),
+                frame: RespSimpleString(""),
                 expectedBuffer: Buffer.from("+\r\n"),
             },
         ].forEach(({ name, frame, expectedBuffer }) => {
@@ -144,13 +144,13 @@ describe("Protocol Tests", () => {
             {
                 name: "Bulk string with content",
                 buffer: Buffer.from("$12\r\nBulk content\r\n"),
-                expectedFrame: BulkString("Bulk content"),
+                expectedFrame: RespBulkString("Bulk content"),
                 expectedSize: 19,
             },
             {
                 name: "Empty bulk string",
                 buffer: Buffer.from("$0\r\n\r\n"),
-                expectedFrame: BulkString(""),
+                expectedFrame: RespBulkString(""),
                 expectedSize: 6,
             },
             {
@@ -171,12 +171,12 @@ describe("Protocol Tests", () => {
         [
             {
                 name: "Bulk string with content",
-                frame: BulkString("Bulk content"),
+                frame: RespBulkString("Bulk content"),
                 expectedBuffer: Buffer.from("$12\r\nBulk content\r\n"),
             },
             {
                 name: "Empty bulk string",
-                frame: BulkString(""),
+                frame: RespBulkString(""),
                 expectedBuffer: Buffer.from("$0\r\n\r\n"),
             },
             {
@@ -197,16 +197,16 @@ describe("Protocol Tests", () => {
             {
                 name: "array with basic content",
                 buffer: Buffer.from("*2\r\n$12\r\nBulk content\r\n$2\r\nok\r\n\r\n"),
-                expectedFrame: RespArray([BulkString("Bulk content"), BulkString("ok")]),
+                expectedFrame: RespArray([RespBulkString("Bulk content"), RespBulkString("ok")]),
                 expectedSize: 33,
             },
             {
                 name: "array with mixed content",
                 buffer: Buffer.from("*3\r\n$12\r\nBulk content\r\n:123\r\n$2\r\nok\r\n\r\n"),
                 expectedFrame: RespArray([
-                    BulkString("Bulk content"), // = $12\r\nBulk content\r\n
+                    RespBulkString("Bulk content"), // = $12\r\nBulk content\r\n
                     RespInteger(123), // = :123\r\n
-                    BulkString("ok"), // = $2\r\nok\r\n
+                    RespBulkString("ok"), // = $2\r\nok\r\n
                 ]),
                 expectedSize: 39,
             },
@@ -214,10 +214,10 @@ describe("Protocol Tests", () => {
                 name: "array with mixed and `null` content",
                 buffer: Buffer.from("*4\r\n$12\r\nBulk content\r\n*-1\r\n:123\r\n$2\r\nok\r\n\r\n"),
                 expectedFrame: RespArray([
-                    BulkString("Bulk content"), // = $12\r\nBulk content\r\n
+                    RespBulkString("Bulk content"), // = $12\r\nBulk content\r\n
                     null, // = *-1\r\n
                     RespInteger(123), // = :123\r\n
-                    BulkString("ok"), // = $2\r\nok\r\n
+                    RespBulkString("ok"), // = $2\r\nok\r\n
                 ]),
                 expectedSize: 44,
             },
@@ -246,9 +246,9 @@ describe("Protocol Tests", () => {
             {
                 name: "mixed content array",
                 frame: RespArray([
-                    BulkString("Bulk content"), // = $12\r\nBulk content\r\n
+                    RespBulkString("Bulk content"), // = $12\r\nBulk content\r\n
                     RespInteger(123), // = :123\r\n
-                    BulkString("ok"), // = $2\r\nok\r\n
+                    RespBulkString("ok"), // = $2\r\nok\r\n
                 ]),
                 expectedBuffer: Buffer.from("*3\r\n$12\r\nBulk content\r\n:123\r\n$2\r\nok\r\n\r\n"),
             },

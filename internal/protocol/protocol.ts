@@ -1,52 +1,52 @@
-type Resp = SimpleString | RespInteger | BulkString | RespError | RespArray | null;
+type Resp = RespSimpleString | RespInteger | RespBulkString | RespError | RespArray | null;
 
-type SimpleString = {
-    type: "SimpleString";
+type RespSimpleString = {
+    type: "RespSimpleString";
     value: string;
 };
 
 type RespInteger = {
-    type: "Integer";
+    type: "RespInteger";
     value: number;
 };
 
-type BulkString = {
-    type: "BulkString";
+type RespBulkString = {
+    type: "RespBulkString";
     value: string;
 };
 
 type RespError = {
-    type: "Error";
+    type: "RespError";
     value: string;
 };
 
 type RespArray = {
-    type: "Array";
+    type: "RespArray";
     value: Resp[];
 };
 
-export const SimpleString = (value: string): SimpleString => ({
-    type: "SimpleString",
+export const RespSimpleString = (value: string): RespSimpleString => ({
+    type: "RespSimpleString",
     value,
 });
 
 export const RespInteger = (value: number): RespInteger => ({
-    type: "Integer",
+    type: "RespInteger",
     value,
 });
 
-export const BulkString = (value: string): BulkString => ({
-    type: "BulkString",
+export const RespBulkString = (value: string): RespBulkString => ({
+    type: "RespBulkString",
     value,
 });
 
 export const RespError = (value: string): RespError => ({
-    type: "Error",
+    type: "RespError",
     value,
 });
 
 export const RespArray = (value: Resp[]): RespArray => ({
-    type: "Array",
+    type: "RespArray",
     value,
 });
 
@@ -75,11 +75,11 @@ export function extractFrameFromBuffer(buffer: Buffer): { frame: Resp | null; fr
             // Find the separator
             const sep = buffer.indexOf(messageSeparator);
 
-            // If a separator is found, extract the frame as a SimpleString
+            // If a separator is found, extract the frame as a RespSimpleString
             // and return it along with the position of the next message
             if (sep >= 0) {
                 const value = buffer.subarray(1, sep).toString();
-                return { frame: SimpleString(value), frameSize: sep + sepLen };
+                return { frame: RespSimpleString(value), frameSize: sep + sepLen };
             }
             break;
         }
@@ -105,7 +105,7 @@ export function extractFrameFromBuffer(buffer: Buffer): { frame: Resp | null; fr
             // Find the separator
             const firstSeparator = buffer.indexOf(messageSeparator);
 
-            // If a separator is not found, we cannot extract a BulkString
+            // If a separator is not found, we cannot extract a RespBulkString
             if (firstSeparator < 0) break;
 
             // If a separator is found, extract the length of the bulk string
@@ -116,16 +116,16 @@ export function extractFrameFromBuffer(buffer: Buffer): { frame: Resp | null; fr
                 return { frame: null, frameSize: firstSeparator + sepLen };
             }
 
-            // If the length is not a valid number, we cannot extract a BulkString
+            // If the length is not a valid number, we cannot extract a RespBulkString
             if (isNaN(bulkStringLength)) break;
 
             // let's look for the second separator
             const secondSeparator = buffer.indexOf(messageSeparator, firstSeparator + sepLen);
 
-            // If the second separator is not found, we cannot extract a BulkString
+            // If the second separator is not found, we cannot extract a RespBulkString
             if (secondSeparator < 0) break;
 
-            // If the second separator is found, extract the frame as a BulkString
+            // If the second separator is found, extract the frame as a RespBulkString
             // and return it along with the position of the next message
             const value = buffer.subarray(firstSeparator + sepLen, secondSeparator).toString();
             if (value.length !== bulkStringLength) {
@@ -134,7 +134,7 @@ export function extractFrameFromBuffer(buffer: Buffer): { frame: Resp | null; fr
             }
 
             return {
-                frame: BulkString(value),
+                frame: RespBulkString(value),
                 frameSize: secondSeparator + sepLen,
             };
         }
@@ -220,17 +220,17 @@ export function encodeFrameToBuffer(frame: Resp): Buffer {
     }
 
     switch (frame.type) {
-        case "SimpleString":
+        case "RespSimpleString":
             return Buffer.from(`+${frame.value}${messageSeparator}`);
-        case "Integer":
+        case "RespInteger":
             return Buffer.from(`:${frame.value}${messageSeparator}`);
-        case "BulkString":
+        case "RespBulkString":
             return Buffer.from(
                 `$${Buffer.byteLength(frame.value)}\r\n${frame.value}${messageSeparator}`,
             );
-        case "Error":
+        case "RespError":
             return Buffer.from(`-${frame.value}${messageSeparator}`);
-        case "Array": {
+        case "RespArray": {
             const prefix = `*${frame.value.length}${messageSeparator}`;
             const body = frame.value.map(encodeFrameToBuffer).join("");
             const postfix = messageSeparator;
