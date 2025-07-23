@@ -1,4 +1,4 @@
-type Resp = RespSimpleString | RespInteger | RespBulkString | RespError | RespArray | null;
+export type Resp = RespSimpleString | RespInteger | RespBulkString | RespError | RespArray | null;
 
 interface RespFn {
     /**
@@ -6,29 +6,30 @@ interface RespFn {
      * @returns Buffer containing the encoded frame
      */
     encode: () => Buffer;
+    toString: () => string;
 }
 
-interface RespSimpleString extends RespFn {
+export interface RespSimpleString extends RespFn {
     type: "RespSimpleString";
     value: string;
 }
 
-interface RespInteger extends RespFn {
+export interface RespInteger extends RespFn {
     type: "RespInteger";
     value: number;
 }
 
-interface RespBulkString extends RespFn {
+export interface RespBulkString extends RespFn {
     type: "RespBulkString";
     value: string | null;
 }
 
-interface RespError extends RespFn {
+export interface RespError extends RespFn {
     type: "RespError";
     value: string;
 }
 
-interface RespArray extends RespFn {
+export interface RespArray extends RespFn {
     type: "RespArray";
     value: Resp[] | null;
 }
@@ -37,12 +38,14 @@ export const RespSimpleString = (value: string): RespSimpleString => ({
     type: "RespSimpleString",
     value,
     encode: () => Buffer.from(`+${value}${messageSeparator}`),
+    toString: () => value,
 });
 
 export const RespInteger = (value: number): RespInteger => ({
     type: "RespInteger",
     value,
     encode: () => Buffer.from(`:${value}${messageSeparator}`),
+    toString: () => value.toString(),
 });
 
 export const RespBulkString = (value: string | null): RespBulkString => ({
@@ -56,12 +59,14 @@ export const RespBulkString = (value: string | null): RespBulkString => ({
 
         return Buffer.from(`$${Buffer.byteLength(value)}\r\n${value}${messageSeparator}`);
     },
+    toString: () => (value === null ? "null" : value),
 });
 
 export const RespError = (value: string): RespError => ({
     type: "RespError",
     value,
     encode: () => Buffer.from(`-${value}${messageSeparator}`),
+    toString: () => value,
 });
 
 export const RespArray = (value: Resp[] | null): RespArray => ({
@@ -78,6 +83,10 @@ export const RespArray = (value: Resp[] | null): RespArray => ({
         const postfix = messageSeparator;
         return Buffer.from(prefix + body + postfix);
     },
+    toString: () =>
+        value === null
+            ? "null"
+            : `${value.map((v) => (v === null ? "null" : v.toString())).join(" ")}`,
 });
 
 // RESP protocol prefixes as constants
@@ -206,4 +215,8 @@ export function extractFrameFromBuffer(buffer: Buffer): { frame: Resp | null; fr
         default:
             return { frame: null, frameSize: 0 };
     }
+}
+
+export function encode(resp: Resp): Buffer | null {
+    return resp?.encode() || null;
 }
