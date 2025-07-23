@@ -14,46 +14,98 @@ const indexForPort = process.argv.findIndex((arg) => arg === "--port");
 const host = (indexForHost !== -1 && process.argv[indexForHost + 1]) || "127.0.0.1";
 const port = (indexForPort !== -1 && parseInt(process.argv[indexForPort + 1], 10)) || 6379;
 
+// prepare wrappers
 const prompt = `${host}:${port}> `;
-process.stdin.setEncoding("utf8");
+const input = createUserPrompt(prompt);
+const redis = createRedisConnection(port, host);
 
-function encodeCommand(cmd: string): Resp {
-    const fields = cmd.split(" ");
+// create and run main input-response loop
+async function runInputResponseLoop() {
+    while (true) {
+        const command = await input.readInput();
 
-    const items: Resp[] = fields.map((field) => RespBulkString(field));
-    return RespArray(items);
+        // if the command is empty, continue to the next iteration
+        if (!command) continue;
+
+        // exit if the command is "exit" or "quit"
+        if (command === "exit" || command === "quit") {
+            process.exit(0);
+        }
+
+        const response = await redis.sendCommand(command);
+        console.log(response);
+    }
+}
+runInputResponseLoop();
+
+/**
+ * Wrapper for user input prompt.
+ */
+function createUserPrompt(prompt: string) {
+    process.stdin.setEncoding("utf8");
+
+    /**
+     * Reads user input from the terminal.
+     * @param prompt The prompt to display before reading input.
+     * @returns A promise that resolves to the user input string.
+     */
+    function readInput(): Promise<string> {
+        return new Promise((resolve) => {
+            process.stdout.write(prompt);
+
+            process.stdin.once("data", (data) => {
+                const input = data.toString().trim();
+                resolve(input);
+            });
+        });
+    }
+
+    return { readInput };
 }
 
-const socket = createConnection(port, host);
+/**
+ * Wrapper for Redis connection.
+ * @param port The port of the Redis server.
+ * @param host The host of the Redis server.
+ */
+function createRedisConnection(port: number, host: string) {
+    const socket = createConnection(port, host);
 
-process.stdout.write(prompt);
+    /**
+     * Wrapper for send-receive data.
+     *
+     * This function sends a command to the Redis server and waits for a response.
+     * @param command The command to send to the Redis server.
+     * @returns A promise that resolves to the response from the Redis server.
+     */
+    function sendCommand(command: string): Promise<string | null> {
+        return new Promise((resolve) => {
+            // encode the command
+            const encodedCommand = encode(encodeCommand(command));
 
-process.stdin.on("data", (input) => {
-    const data = input.toString().trim();
+            // if the encoded command is null, resolve with null
+            if (!encodedCommand) {
+                resolve(null);
+                return;
+            }
 
-    // if the input is empty, just return
-    if (data === "") {
-        process.stdout.write(prompt);
-        return;
+            // send the encoded command to the Redis server
+            socket.write(encodedCommand);
+
+            // wait for the response
+            socket.once("data", (data: Buffer) => {
+                const { frame } = extractFrameFromBuffer(data);
+                resolve(frame?.toString() ?? null);
+            });
+        });
+
+        function encodeCommand(cmd: string): Resp {
+            const fields = cmd.split(" ");
+
+            const items: Resp[] = fields.map((field) => RespBulkString(field));
+            return RespArray(items);
+        }
     }
 
-    // exit if the command is "exit" or "quit"
-    if (data === "exit" || data === "quit") {
-        process.exit(0);
-    }
-
-    // encode the command itself
-    const encodedCommand = encode(encodeCommand(data));
-
-    // will never be `null`, but we check for it just in case
-    if (!encodedCommand) return;
-
-    // send the encoded command to the Redis server
-    socket.write(encodedCommand);
-});
-
-socket.on("data", (data: Buffer) => {
-    console.log(extractFrameFromBuffer(data).frame?.toString() ?? "No response");
-
-    process.stdout.write(prompt);
-});
+    return { sendCommand };
+}
