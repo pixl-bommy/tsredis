@@ -1,53 +1,83 @@
 type Resp = RespSimpleString | RespInteger | RespBulkString | RespError | RespArray | null;
 
-type RespSimpleString = {
+interface RespFn {
+    /**
+     * Encode a RESP frame to a Buffer.
+     * @returns Buffer containing the encoded frame
+     */
+    encode: () => Buffer;
+}
+
+interface RespSimpleString extends RespFn {
     type: "RespSimpleString";
     value: string;
-};
+}
 
-type RespInteger = {
+interface RespInteger extends RespFn {
     type: "RespInteger";
     value: number;
-};
+}
 
-type RespBulkString = {
+interface RespBulkString extends RespFn {
     type: "RespBulkString";
-    value: string;
-};
+    value: string | null;
+}
 
-type RespError = {
+interface RespError extends RespFn {
     type: "RespError";
     value: string;
-};
+}
 
-type RespArray = {
+interface RespArray extends RespFn {
     type: "RespArray";
-    value: Resp[];
-};
+    value: Resp[] | null;
+}
 
 export const RespSimpleString = (value: string): RespSimpleString => ({
     type: "RespSimpleString",
     value,
+    encode: () => Buffer.from(`+${value}${messageSeparator}`),
 });
 
 export const RespInteger = (value: number): RespInteger => ({
     type: "RespInteger",
     value,
+    encode: () => Buffer.from(`:${value}${messageSeparator}`),
 });
 
-export const RespBulkString = (value: string): RespBulkString => ({
+export const RespBulkString = (value: string | null): RespBulkString => ({
     type: "RespBulkString",
     value,
+    encode: () => {
+        if (value === null) {
+            // Special case for null bulk string
+            return Buffer.from("$-1\r\n");
+        }
+
+        return Buffer.from(`$${Buffer.byteLength(value)}\r\n${value}${messageSeparator}`);
+    },
 });
 
 export const RespError = (value: string): RespError => ({
     type: "RespError",
     value,
+    encode: () => Buffer.from(`-${value}${messageSeparator}`),
 });
 
-export const RespArray = (value: Resp[]): RespArray => ({
+export const RespArray = (value: Resp[] | null): RespArray => ({
     type: "RespArray",
     value,
+    encode: () => {
+        if (value === null) {
+            // Special case for null array
+            return Buffer.from("*-1\r\n");
+        }
+
+        const prefix = `*${value.length}${messageSeparator}`;
+        const body = value.map((child) => child?.encode()).join("");
+        const postfix = messageSeparator;
+        return Buffer.from(prefix + body + postfix);
+    },
 });
 
 // RESP protocol prefixes as constants
@@ -105,7 +135,7 @@ export function extractFrameFromBuffer(buffer: Buffer): { frame: Resp | null; fr
 
             // If the length is -1, it indicates a null frame
             if (bulkStringLength === -1) {
-                return { frame: null, frameSize: sep + sepLen };
+                return { frame: RespBulkString(null), frameSize: sep + sepLen };
             }
 
             // If the length is not a valid number, we cannot extract a RespBulkString
@@ -137,7 +167,7 @@ export function extractFrameFromBuffer(buffer: Buffer): { frame: Resp | null; fr
 
             // If the length is -1, it indicates a null frame
             if (arrayLength === -1) {
-                return { frame: null, frameSize: sep + sepLen };
+                return { frame: RespArray(null), frameSize: sep + sepLen };
             }
 
             // If the length is not a valid number, we cannot extract an Array
@@ -175,39 +205,5 @@ export function extractFrameFromBuffer(buffer: Buffer): { frame: Resp | null; fr
         // Fallthrough case for unsupported RESP types
         default:
             return { frame: null, frameSize: 0 };
-    }
-}
-
-/**
- * Encode a RESP frame to a Buffer.
- * @param frame frame to encode
- * @returns Buffer containing the encoded frame
- * @throws Error if the frame type is not supported
- */
-export function encodeFrameToBuffer(frame: Resp): Buffer {
-    if (frame === null) {
-        // Special case for null frame
-        return Buffer.from("$-1\r\n");
-    }
-
-    switch (frame.type) {
-        case "RespSimpleString":
-            return Buffer.from(`+${frame.value}${messageSeparator}`);
-        case "RespInteger":
-            return Buffer.from(`:${frame.value}${messageSeparator}`);
-        case "RespBulkString":
-            return Buffer.from(
-                `$${Buffer.byteLength(frame.value)}\r\n${frame.value}${messageSeparator}`,
-            );
-        case "RespError":
-            return Buffer.from(`-${frame.value}${messageSeparator}`);
-        case "RespArray": {
-            const prefix = `*${frame.value.length}${messageSeparator}`;
-            const body = frame.value.map(encodeFrameToBuffer).join("");
-            const postfix = messageSeparator;
-            return Buffer.from(prefix + body + postfix);
-        }
-        default:
-            throw new Error(`Unsupported RESP type: ${(frame as any).type}`);
     }
 }

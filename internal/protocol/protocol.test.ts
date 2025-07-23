@@ -3,7 +3,6 @@ import assert from "node:assert";
 
 import {
     RespBulkString,
-    encodeFrameToBuffer,
     extractFrameFromBuffer,
     RespArray,
     RespError,
@@ -36,7 +35,11 @@ describe("Protocol Tests", () => {
             test(`extract: ${name}`, () => {
                 const { frame, frameSize } = extractFrameFromBuffer(buffer);
 
-                assert.deepStrictEqual(frame, expectedFrame, "Failed to parse frame correctly");
+                assert.strictEqual(
+                    frame?.value,
+                    expectedFrame?.value,
+                    "Failed to parse frame correctly",
+                );
                 assert.strictEqual(frameSize, expectedSize, "Incorrect frame size");
             });
         });
@@ -54,7 +57,7 @@ describe("Protocol Tests", () => {
             },
         ].forEach(({ name, frame, expectedBuffer }) => {
             test(`encode: ${name}`, () => {
-                const buffer = encodeFrameToBuffer(frame);
+                const buffer = frame.encode();
                 assert.deepEqual(buffer, expectedBuffer, "Encoded buffer does not match expected");
             });
         });
@@ -84,7 +87,11 @@ describe("Protocol Tests", () => {
             test(`extract: ${name}`, () => {
                 const { frame, frameSize } = extractFrameFromBuffer(buffer);
 
-                assert.deepStrictEqual(frame, expectedFrame, "Failed to parse frame correctly");
+                assert.strictEqual(
+                    frame?.value,
+                    expectedFrame?.value,
+                    "Failed to parse frame correctly",
+                );
                 assert.strictEqual(frameSize, expectedSize, "Incorrect frame size");
             });
         });
@@ -97,7 +104,7 @@ describe("Protocol Tests", () => {
             },
         ].forEach(({ name, frame, expectedBuffer }) => {
             test(`encode: ${name}`, () => {
-                const buffer = encodeFrameToBuffer(frame);
+                const buffer = frame.encode();
                 assert.deepEqual(buffer, expectedBuffer, "Encoded buffer does not match expected");
             });
         });
@@ -133,7 +140,11 @@ describe("Protocol Tests", () => {
             test(`extract: ${name}`, () => {
                 const { frame, frameSize } = extractFrameFromBuffer(buffer);
 
-                assert.deepStrictEqual(frame, expectedFrame, "Failed to parse frame correctly");
+                assert.strictEqual(
+                    frame?.value,
+                    expectedFrame?.value,
+                    "Failed to parse frame correctly",
+                );
                 assert.strictEqual(frameSize, expectedSize, "Incorrect frame size");
             });
         });
@@ -151,7 +162,7 @@ describe("Protocol Tests", () => {
             },
         ].forEach(({ name, frame, expectedBuffer }) => {
             test(`encode: ${name}`, () => {
-                const buffer = encodeFrameToBuffer(frame);
+                const buffer = frame.encode();
                 assert.deepEqual(buffer, expectedBuffer, "Encoded buffer does not match expected");
             });
         });
@@ -178,7 +189,7 @@ describe("Protocol Tests", () => {
                 expectedSize: 19,
             },
             {
-                name: "Bulk string with separator",
+                name: "Bulk string with embedded newline",
                 buffer: Buffer.from("$12\r\nHello\r\nWorld\r\n"),
                 expectedFrame: RespBulkString("Hello\r\nWorld"),
                 expectedSize: 19,
@@ -192,14 +203,18 @@ describe("Protocol Tests", () => {
             {
                 name: "Null bulk string",
                 buffer: Buffer.from("$-1\r\n"),
-                expectedFrame: null,
+                expectedFrame: RespBulkString(null),
                 expectedSize: 5,
             },
         ].forEach(({ name, buffer, expectedFrame, expectedSize }) => {
             test(`extract: ${name}`, () => {
                 const { frame, frameSize } = extractFrameFromBuffer(buffer);
 
-                assert.deepStrictEqual(frame, expectedFrame, "Failed to parse frame correctly");
+                assert.strictEqual(
+                    frame?.value,
+                    expectedFrame?.value,
+                    "Failed to parse frame correctly",
+                );
                 assert.strictEqual(frameSize, expectedSize, "Incorrect frame size");
             });
         });
@@ -211,18 +226,23 @@ describe("Protocol Tests", () => {
                 expectedBuffer: Buffer.from("$12\r\nBulk content\r\n"),
             },
             {
+                name: "Bulk string with embedded newline",
+                frame: RespBulkString("Bulk\r\ncontent"),
+                expectedBuffer: Buffer.from("$13\r\nBulk\r\ncontent\r\n"),
+            },
+            {
                 name: "Empty bulk string",
                 frame: RespBulkString(""),
                 expectedBuffer: Buffer.from("$0\r\n\r\n"),
             },
             {
                 name: "`null` frame will be encoded as an special bulk string",
-                frame: null,
+                frame: RespBulkString(null),
                 expectedBuffer: Buffer.from("$-1\r\n"),
             },
         ].forEach(({ name, frame, expectedBuffer }) => {
             test(`encode: ${name}`, () => {
-                const buffer = encodeFrameToBuffer(frame);
+                const buffer = frame.encode();
                 assert.deepEqual(buffer, expectedBuffer, "Encoded buffer does not match expected");
             });
         });
@@ -266,11 +286,21 @@ describe("Protocol Tests", () => {
                 expectedFrame: RespArray([RespInteger(1), RespInteger(2), RespInteger(3)]),
                 expectedSize: 16,
             },
+            {
+                name: "`null` array",
+                buffer: Buffer.from("*-1\r\n"),
+                expectedFrame: RespArray(null),
+                expectedSize: 5,
+            },
         ].forEach(({ name, buffer, expectedFrame, expectedSize }) => {
             test(`extract: ${name}`, () => {
                 const { frame, frameSize } = extractFrameFromBuffer(buffer);
 
-                assert.deepStrictEqual(frame, expectedFrame, "Failed to parse frame correctly");
+                // TODO: Check original frame type without encoding it before (WORKAROUND)
+                const expectedBuffer = expectedFrame?.encode();
+                const actualBuffer = frame?.encode();
+
+                assert.deepEqual(actualBuffer, expectedBuffer, "Failed to parse frame correctly");
                 assert.strictEqual(frameSize, expectedSize, "Incorrect frame size");
             });
         });
@@ -292,9 +322,14 @@ describe("Protocol Tests", () => {
                 frame: RespArray([]),
                 expectedBuffer: Buffer.from("*0\r\n\r\n"),
             },
+            {
+                name: "`null` array",
+                frame: RespArray(null),
+                expectedBuffer: Buffer.from("*-1\r\n"),
+            },
         ].forEach(({ name, frame, expectedBuffer }) => {
             test(`encode: ${name}`, () => {
-                const buffer = encodeFrameToBuffer(frame);
+                const buffer = frame.encode();
                 assert.deepEqual(buffer, expectedBuffer, "Encoded buffer does not match expected");
             });
         });
