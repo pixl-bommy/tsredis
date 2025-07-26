@@ -1,4 +1,4 @@
-import { createConnection, Socket } from "node:net";
+import { createConnection } from "node:net";
 import {
     encode,
     extractFrameFromBuffer,
