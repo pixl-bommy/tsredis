@@ -7,36 +7,32 @@ import {
     type Resp,
 } from "../../internal/protocol/protocol.ts";
 
-// get "host" and "port" from arguments
-// if not provided, use default values
-const indexForHost = process.argv.findIndex((arg) => arg === "--host");
-const indexForPort = process.argv.findIndex((arg) => arg === "--port");
-const host = (indexForHost !== -1 && process.argv[indexForHost + 1]) || "127.0.0.1";
-const port = (indexForPort !== -1 && parseInt(process.argv[indexForPort + 1], 10)) || 6379;
+export function createRedisCli(host: string, port: number) {
+    // prepare wrappers
+    const prompt = `${host}:${port}> `;
+    const input = createUserPrompt(prompt);
+    const redis = createRedisConnection(port, host);
 
-// prepare wrappers
-const prompt = `${host}:${port}> `;
-const input = createUserPrompt(prompt);
-const redis = createRedisConnection(port, host);
+    // create and run main input-response loop
+    async function runInputResponseLoop() {
+        while (true) {
+            const command = await input.readInput();
 
-// create and run main input-response loop
-async function runInputResponseLoop() {
-    while (true) {
-        const command = await input.readInput();
+            // if the command is empty, continue to the next iteration
+            if (!command) continue;
 
-        // if the command is empty, continue to the next iteration
-        if (!command) continue;
+            // exit if the command is "exit" or "quit"
+            if (command === "exit" || command === "quit") {
+                process.exit(0);
+            }
 
-        // exit if the command is "exit" or "quit"
-        if (command === "exit" || command === "quit") {
-            process.exit(0);
+            const response = await redis.sendCommand(command);
+            console.log(response);
         }
-
-        const response = await redis.sendCommand(command);
-        console.log(response);
     }
+
+    return { run: runInputResponseLoop };
 }
-runInputResponseLoop();
 
 /**
  * Wrapper for user input prompt.

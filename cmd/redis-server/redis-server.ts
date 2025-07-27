@@ -1,10 +1,20 @@
-import { createServer } from "node:net";
+import { createServer, Socket } from "node:net";
 import { extractFrameFromBuffer } from "../../internal/protocol/protocol.ts";
 import { handleCommand } from "../../internal/commands/commands.ts";
 
-const PORT = 6379;
+export function createRedisServer(host: string, port: number) {
+    const server = createServer(handleNewSocket);
 
-const server = createServer((socket) => {
+    function serve() {
+        server.listen(port, host, () => {
+            console.log(`Redis server is running on ${host}:${port}`);
+        });
+    }
+
+    return { serve };
+}
+
+function handleNewSocket(socket: Socket) {
     console.log("client connected");
     socket.on("end", () => {
         console.log("client disconnected");
@@ -27,8 +37,4 @@ const server = createServer((socket) => {
         // send the response back to the client
         socket.write(response.encode());
     });
-});
-
-server.listen(PORT, () => {
-    console.log(`Redis server is running on port ${PORT}`);
-});
+}

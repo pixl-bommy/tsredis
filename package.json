@@ -5,7 +5,8 @@
     "main": "index.js",
     "scripts": {
         "test": "node --test",
-        "redis-cli": "node cmd/redis-cli/redis-cli.ts"
+        "redis-cli": "node cmd/redis-cli/main.ts",
+        "redis-server": "node cmd/redis-server/main.ts"
     },
     "type": "module",
     "keywords": [],
