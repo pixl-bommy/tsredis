@@ -34,8 +34,7 @@ export function handleCommand(resp: RespArray, datastore: Datastore): NonNullabl
 
         // fallback for unknown commands
         default:
-            console.error(`Unknown command: ${command}`);
-            return RespError(`ERR unknown command '${command}'`);
+            return handleUnrecognisedCommand(command);
     }
 }
 
@@ -60,6 +59,11 @@ function handleEchoCommand(commandArray: Resp[]): NonNullable<Resp> {
 
     // array has size 2 surely, so we can safely access the second element
     return commandArray[1];
+}
+
+function handleUnrecognisedCommand(command: string): NonNullable<Resp> {
+    console.error(`Unknown command: ${command}`);
+    return RespError(`ERR unknown command '${command}'`);
 }
 
 function handleExistsCommand(commandArray: Resp[], datastore: Datastore): NonNullable<Resp> {
