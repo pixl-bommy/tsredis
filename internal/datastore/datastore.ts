@@ -10,8 +10,11 @@ export class Datastore {
      * @param key key to store the value under
      * @param value value to store
      */
-    public set(key: string, value: string): void {
+    public set(key: string, value: string): { error: string | null } {
         this.data.set(key, { value });
+
+        // NOTE: This is returned for consistency for now.
+        return { error: null };
     }
 
     /**
@@ -26,5 +29,17 @@ export class Datastore {
         } else {
             return { value: "", error: "not found" };
         }
+    }
+
+    /**
+     * Check if a key exists in the datastore.
+     *
+     * This will even return true for keys that have an empty value.
+     *
+     * @param key key to check for existence
+     * @returns true if the key exists, false otherwise
+     */
+    public exists(key: string): boolean {
+        return this.data.has(key);
     }
 }

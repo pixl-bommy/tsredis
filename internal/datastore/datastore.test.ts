@@ -59,4 +59,28 @@ describe("Datastore Tests", () => {
             assert.strictEqual(secondTry.error, null);
         });
     });
+
+    describe("Exists", () => {
+        [
+            {
+                name: "Existing Key",
+                key: "key",
+                expectedValue: true,
+            },
+            {
+                name: "Not Existing Key",
+                key: "unknownKey",
+                expectedValue: false,
+            },
+        ].forEach(({ name, key, expectedValue }) => {
+            test(name, () => {
+                const datastore = new Datastore();
+                datastore.set("key", "value");
+
+                const exists = datastore.exists(key);
+
+                assert.equal(exists, expectedValue);
+            });
+        });
+    });
 });
